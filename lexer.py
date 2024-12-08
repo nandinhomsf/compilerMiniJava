@@ -5,13 +5,7 @@ import ply.lex as lex
 # <, >, <=, >=, ==, !=
 # [, ], (, ), {, }
 # ;, ,, ., =
-tokens = [
-    'ID', 'NUMBER', 
-    'PLUS', 'MINUS', 'TIMES', 'AND', 'NOT', 
-    'LESS', 'GREATER', 'LEQ', 'GEQ', 'EQ', 'NEQ', 
-    'LBRACKET', 'RBRACKET', 'LPAREN', 'RPAREN', 'LBRANCE', 'RBRANCE', 
-    'SEMICOLON', 'COMMA', 'DOT', 'ASSIGN' 
-]
+
 
 reserved = {
     'boolean': 'BOOL',
@@ -36,15 +30,22 @@ reserved = {
     'null': 'NULL'
 }
 
-tokens = tokens + list(reserved.values())
+tokens = [
+    'ID', 'NUMBER', 
+    'PLUS', 'MINUS', 'TIMES', 'AND', 'NOT', 
+    'LESS', 'GREATER', 'LEQ', 'GEQ', 'EQ', 'NEQ', 
+    'LBRACKET', 'RBRACKET', 'LPAREN', 'RPAREN', 'LBRACE', 'RBRACE', 
+    'SEMICOLON', 'COMMA', 'DOT', 'ASSIGN',
+    # Add reserved keywords dynamically
+] + list(reserved.values())
 
 t_PLUS = r'\+'
-t_MINUS = r'\-'
+t_MINUS = r'-'
 t_TIMES = r'\*'
 t_AND = r'&&'
-t_NOT = r'\!'
-t_LESS = r'\<'
-t_GREATER = r'\>'
+t_NOT = r'!'
+t_LESS = r'<'
+t_GREATER = r'>'
 t_LEQ = r'<='
 t_GEQ = r'>='
 t_EQ = r'=='
@@ -53,8 +54,8 @@ t_LBRACKET = r'\['
 t_RBRACKET = r'\]'
 t_LPAREN = r'\('
 t_RPAREN = r'\)'
-t_LBRANCE = r'\{'
-t_RBRANCE = r'\}'
+t_LBRACE = r'\{'
+t_RBRACE = r'\}'
 t_SEMICOLON = r'\;'
 t_COMMA = r'\,'
 t_DOT = r'\.'
@@ -78,38 +79,22 @@ def t_NEWLINE(t):
     r'\n+'
     t.lexer.lineno += len(t.value)
 
+def t_error(t):
+    print(f"Problema no caracter '{t.value[0]}' na linha {t.lineno}")
+    t.lexer.skip(1)
+
 t_ignore  = ' \t'
 
-
+# Create the lexer
 lexer = lex.lex()
 
-# Test it out
-data = '''
-class Factorial{
-    public static void main(String[] a){
-        System.out.println(new Fac().ComputeFac(10));
-    }
-}
-
-class Fac {
-    public int ComputeFac(int num){
-        int num_aux;
-        if (num < 1)
-            num_aux = 1;
-        else
-            num_aux = num * (this.ComputeFac(num-1));
-    return num_aux ;
-    }
-}
-
-'''
-
-
-lexer.input(data)
-
-# Tokenize
-while True:
-    tok = lexer.token()
-    if not tok: 
-        break      # No more input
-    print(tok)
+def tokenize(data):
+    """Tokenize the input data string."""
+    lexer.input(data)  # Pass the raw data string to the lexer
+    tokens = []
+    while True:
+        tok = lexer.token()
+        if not tok: 
+            break  # No more input
+        tokens.append(tok)
+    return tokens
