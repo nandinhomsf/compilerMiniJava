@@ -1,170 +1,282 @@
-import ply.yacc as yacc
-from lexer import tokens  # Import the lexer tokens
+class Node:
+    def __init__(self, type, value=None):
+        self.type = type
+        self.value = value
+        self.children = []
 
-# Grammar Rules
-def p_program(p):
-    '''program : class_decl_list
-               | main_function'''
-    p[0] = p[1]  # AST root is a list of class declarations
+    def __repr__(self, level=0):
+        ret = "\t" * level + repr(self.type) + (f": {self.value}" if self.value else "") + "\n"
+        for child in self.children:
+            ret += child.__repr__(level + 1)
+        return ret
 
-def p_main_function(p):
-    '''main_function : PUBLIC STATIC VOID MAIN LPAREN RPAREN LBRACE statement_list RBRACE'''
-    p[0] = ('main_function', p[6])  # 'main_function' -> body of main function
+class Parser:
+    def __init__(self, tokens):
+        self.tokens = tokens
+        self.current_pos = 0
 
-def p_class_decl_list(p):
-    '''class_decl_list : class_decl
-                       | class_decl_list class_decl'''
-    if len(p) == 2:
-        p[0] = [p[1]]
-    else:
-        p[0] = p[1] + [p[2]]
+    def parse(self):
+        return self.prog()
 
-def p_class_decl(p):
-    '''class_decl : PUBLIC CLASS ID EXTENDS ID LBRACE method_decl_list RBRACE
-                  | CLASS ID LBRACE method_decl_list RBRACE'''
-    if len(p) == 9:  # class declaration with EXTENDS
-        p[0] = ('class', p[2], p[4], p[6], p[8])  # ('class', access, class_name, extends_class, method_list)
-    elif len(p) == 8:  # class declaration without PUBLIC
-        p[0] = ('class', None, p[2], p[4], p[6])  # ('class', None, class_name, extends_class, method_list)
+    def prog(self):
+        node = Node("PROG")
+        node.children.append(self.main())
+        while self.current_token()[1] == "class":
+           node.children.append(self.classe())
+        return node
 
-def p_method_decl_list(p):
-    '''method_decl_list : method_decl method_decl_list
-                        | method_decl'''
-    if len(p) == 3:
-        p[0] = [p[1]] + p[2]  # Add method to list
-    else:
-        p[0] = [p[1]]  # Only one method
+    def main(self):
+        node = Node("MAIN")
+        node.children.append(self.match("RESERVED_WORD", "class"))
+        node.children.append(self.match("IDENTIFIER"))
+        node.children.append(self.match("PUNCTUATION", "{"))
+        node.children.append(self.match("RESERVED_WORD", "public"))
+        node.children.append(self.match("RESERVED_WORD", "static"))
+        node.children.append(self.match("RESERVED_WORD", "void"))
+        node.children.append(self.match("RESERVED_WORD", "main"))
+        node.children.append(self.match("PUNCTUATION", "("))
+        node.children.append(self.match("RESERVED_WORD", "String"))
+        node.children.append(self.match("PUNCTUATION", "["))
+        node.children.append(self.match("PUNCTUATION", "]"))
+        node.children.append(self.match("IDENTIFIER"))
+        node.children.append(self.match("PUNCTUATION", ")"))
+        node.children.append(self.match("PUNCTUATION", "{"))
+        node.children.append(self.cmd())
+        node.children.append(self.match("PUNCTUATION", "}"))
+        node.children.append(self.match("PUNCTUATION", "}"))
+        return node
 
-def p_method_decl(p):
-    '''method_decl : type ID LPAREN param_list RPAREN LBRACE statement_list RBRACE'''
-    p[0] = ('method', p[1], p[2], p[4], p[6])  # (type, name, params, body)
+    def classe(self):
+        node = Node("CLASSE")
+        node.children.append(self.match("RESERVED_WORD", "class"))
+        node.children.append(self.match("IDENTIFIER"))
+        if self.current_token()[1] == "extends":
+            node.children.append(self.match("RESERVED_WORD", "extends"))
+            node.children.append(self.match("IDENTIFIER"))
+        node.children.append(self.match("PUNCTUATION", "{"))
+        while self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] in ["int", "boolean", "String"]:
+            node.children.append(self.var())
+        while self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] == "public":
+            node.children.append(self.metodo())
+        node.children.append(self.match("PUNCTUATION", "}"))
+        return node
 
-def p_param(p):
-    '''param : INT ID'''
-    p[0] = ('param', p[1], p[2])  # Example for integer parameter
+    def var(self):
+        node = Node("VAR")
+        node.children.append(self.tipo())
+        node.children.append(self.match("IDENTIFIER"))
+        node.children.append(self.match("PUNCTUATION", ";"))
+        return node
 
-def p_param_list(p):
-    '''param_list : param
-                  | param_list COMMA param
-                  | empty'''
-    if len(p) == 2:  # Single parameter or empty
-        p[0] = [p[1]] if p[1] is not None else []
-    else:  # Multiple parameters
-        p[0] = p[1] + [p[3]]
+    def metodo(self):
+        node = Node("METODO")
+        node.children.append(self.match("RESERVED_WORD", "public"))
+        node.children.append(self.tipo())
+        node.children.append(self.match("IDENTIFIER"))
+        node.children.append(self.match("PUNCTUATION", "("))
+        if self.current_token()[0] != "PUNCTUATION" or self.current_token()[1] != ")":
+            node.children.append(self.params())
+        node.children.append(self.match("PUNCTUATION", ")"))
+        node.children.append(self.match("PUNCTUATION", "{"))
+        while self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] in ["int", "boolean", "String"]:
+            node.children.append(self.var())
+        while self.current_token()[0] in ["RESERVED_WORD", "IDENTIFIER", "PUNCTUATION"] and self.current_token()[1] != "return":
+            node.children.append(self.cmd())
+        node.children.append(self.match("RESERVED_WORD", "return"))
+        node.children.append(self.exp())
+        node.children.append(self.match("PUNCTUATION", ";"))
+        node.children.append(self.match("PUNCTUATION", "}"))
+        return node
 
+    def params(self):
+        node = Node("PARAMS")
+        node.children.append(self.tipo())
+        node.children.append(self.match("IDENTIFIER"))
+        while self.current_token()[0] == "PUNCTUATION" and self.current_token()[1] == ",":
+            node.children.append(self.match("PUNCTUATION", ","))
+            node.children.append(self.tipo())
+            node.children.append(self.match("IDENTIFIER"))
+        return node
 
-def p_statement(p):
-    '''statement : assignment
-                 | if_statement
-                 | while_statement
-                 | return_statement
-                 | print_statement
-                 | block'''
-    p[0] = p[1]
+    def tipo(self):
+        node = Node("TIPO")
+        if self.current_token()[1] == "int":
+            node.children.append(self.match("RESERVED_WORD", "int"))
+            if self.current_token()[0] == "PUNCTUATION" and self.current_token()[1] == "[":
+                node.children.append(self.match("PUNCTUATION", "["))
+                node.children.append(self.match("PUNCTUATION", "]"))
+        elif self.current_token()[1] == "boolean":
+            node.children.append(self.match("RESERVED_WORD", "boolean"))
+        elif self.current_token()[0] == "IDENTIFIER":
+            node.children.append(self.match("IDENTIFIER"))
+        else:
+            raise ValueError(f"Token inesperado: {self.current_token()} na posição {self.current_pos}")
+        return node
 
-def p_assignment(p):
-    '''assignment : ID ASSIGN expression SEMICOLON'''
-    p[0] = ('assign', p[1], p[3])
+    def cmd(self):
+        node = Node("CMD")
+        if self.current_token()[0] == "PUNCTUATION" and self.current_token()[1] == "{":
+            node.children.append(self.match("PUNCTUATION", "{"))
+            while self.current_token()[0] in ["RESERVED_WORD", "IDENTIFIER", "PUNCTUATION"]:
+                node.children.append(self.cmd())
+            node.children.append(self.match("PUNCTUATION", "}"))
+        elif self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] == "if":
+            node.children.append(self.match("RESERVED_WORD", "if"))
+            node.children.append(self.match("PUNCTUATION", "("))
+            node.children.append(self.exp())
+            node.children.append(self.match("PUNCTUATION", ")"))
+            node.children.append(self.cmd())
+            if self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] == "else":
+                node.children.append(self.match("RESERVED_WORD", "else"))
+                node.children.append(self.cmd())
+        elif self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] == "while":
+            node.children.append(self.match("RESERVED_WORD", "while"))
+            node.children.append(self.match("PUNCTUATION", "("))
+            node.children.append(self.exp())
+            node.children.append(self.match("PUNCTUATION", ")"))
+            node.children.append(self.cmd())
+        elif self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] == "System.out.println":
+            node.children.append(self.match("RESERVED_WORD", "System.out.println"))
+            node.children.append(self.match("PUNCTUATION", "("))
+            node.children.append(self.exp())
+            node.children.append(self.match("PUNCTUATION", ")"))
+            node.children.append(self.match("PUNCTUATION", ";"))
+        elif self.current_token()[0] == "IDENTIFIER":
+            node.children.append(self.match("IDENTIFIER"))
+            if self.current_token()[0] == "OPERATOR" and self.current_token()[1] == "=":
+                node.children.append(self.match("OPERATOR", "="))
+                node.children.append(self.exp())
+                node.children.append(self.match("PUNCTUATION", ";"))
+            elif self.current_token()[0] == "PUNCTUATION" and self.current_token()[1] == "[":
+                node.children.append(self.match("PUNCTUATION", "["))
+                node.children.append(self.exp())
+                node.children.append(self.match("PUNCTUATION", "]"))
+                node.children.append(self.match("OPERATOR", "="))
+                node.children.append(self.exp())
+                node.children.append(self.match("PUNCTUATION", ";"))
+        else:
+            raise ValueError(f"Token inesperado: {self.current_token()} na posição {self.current_pos}")
+        return node
 
-def p_if_statement(p):
-    '''if_statement : IF LPAREN expression RPAREN statement
-                     | IF LPAREN expression RPAREN statement ELSE statement'''
-    if len(p) == 6:
-        p[0] = ('if', p[3], p[5])  # If statement without an else clause
-    else:
-        p[0] = ('if', p[3], p[5], p[7])  # If statement with an else clause
+    def exp(self):
+        node = Node("EXP")
+        node.children.append(self.rexp())
+        while self.current_token()[0] == "OPERATOR" and self.current_token()[1] == "&&":
+            node.children.append(self.match("OPERATOR", "&&"))
+            node.children.append(self.rexp())
+        return node
 
-def p_while_statement(p):
-    '''while_statement : WHILE LPAREN expression RPAREN statement'''
-    p[0] = ('while', p[3], p[5])
+    def rexp(self):
+        node = Node("REXP")
+        node.children.append(self.aexp())
+        while self.current_token()[0] == "OPERATOR" and self.current_token()[1] in ["<", "==", "!="]:
+            node.children.append(self.match("OPERATOR", self.current_token()[1]))
+            node.children.append(self.aexp())
+        return node
 
-def p_return_statement(p):
-    '''return_statement : RETURN expression SEMICOLON'''
-    p[0] = ('return', p[2])
+    def aexp(self):
+        node = Node("AEXP")
+        node.children.append(self.mexp())
+        while self.current_token()[0] == "OPERATOR" and self.current_token()[1] in ["+", "-"]:
+            node.children.append(self.match("OPERATOR", self.current_token()[1]))
+            node.children.append(self.mexp())
+        return node
 
-def p_print_statement(p):
-    '''print_statement : PRINTLN LPAREN expression RPAREN SEMICOLON'''
-    p[0] = ('print', p[3])
+    def mexp(self):
+        node = Node("MEXP")
+        node.children.append(self.sexp())
+        while self.current_token()[0] == "OPERATOR" and self.current_token()[1] == "*":
+            node.children.append(self.match("OPERATOR", "*"))
+            node.children.append(self.sexp())
+        return node
 
-def p_block(p):
-    '''block : LBRACE statement_list RBRACE'''
-    p[0] = p[2]
+    def sexp(self):
+        node = Node("SEXP")
+        if self.current_token()[0] == "OPERATOR" and self.current_token()[1] in ["!", "-"]:
+            node.children.append(self.match("OPERATOR", self.current_token()[1]))
+            node.children.append(self.sexp())
+        elif self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] in ["true", "false", "null"]:
+            node.children.append(self.match("RESERVED_WORD", self.current_token()[1]))
+        elif self.current_token()[0] == "INTEGER":
+            node.children.append(self.match("INTEGER"))
+        elif self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] == "new":
+            if self.current_token()[1] == "int":
+                node.children.append(self.match("RESERVED_WORD", "new"))
+                node.children.append(self.match("RESERVED_WORD", "int"))
+                node.children.append(self.match("PUNCTUATION", "["))
+                node.children.append(self.exp())
+                node.children.append(self.match("PUNCTUATION", "]"))
+            else:
+                node.children.append(self.pexp())
+        elif self.current_token()[0] == "IDENTIFIER":
+            node.children.append(self.pexp())
+            if self.current_token()[0] == "PUNCTUATION" and self.current_token()[1] == ".":
+                node.children.append(self.match("PUNCTUATION", "."))
+                node.children.append(self.match("IDENTIFIER", "length"))
+            elif self.current_token()[0] == "PUNCTUATION" and self.current_token()[1] == "[":
+                node.children.append(self.match("PUNCTUATION", "["))
+                node.children.append(self.exp())
+                node.children.append(self.match("PUNCTUATION", "]"))
+        elif self.current_token()[0] == "PUNCTUATION" and self.current_token()[1] == "(":
+            node.children.append(self.match("PUNCTUATION", "("))
+            node.children.append(self.exp())
+            node.children.append(self.match("PUNCTUATION", ")"))
+        elif self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] == "this":
+            node.children.append(self.pexp())
+        else:
+            raise ValueError(f"Token inesperado: {self.current_token()} na posição {self.current_pos}")
+        return node
 
-def p_statement_list(p):
-    '''statement_list : statement
-                      | statement_list statement'''
-    if len(p) == 2:
-        p[0] = [p[1]]
-    else:
-        p[0] = p[1] + [p[2]]
+    def pexp(self):
+        node = Node("PEXP")
+        if self.current_token()[0] == "IDENTIFIER":
+            node.children.append(self.match("IDENTIFIER"))
+        elif self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] == "this":
+            node.children.append(self.match("RESERVED_WORD", "this"))
+        elif self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] == "new":
+            node.children.append(self.match("RESERVED_WORD", "new"))
+            node.children.append(self.match("IDENTIFIER"))
+            node.children.append(self.match("PUNCTUATION", "("))
+            node.children.append(self.match("PUNCTUATION", ")"))
+        elif self.current_token()[0] == "PUNCTUATION" and self.current_token()[1] == "(":
+            node.children.append(self.match("PUNCTUATION", "("))
+            node.children.append(self.exp())
+            node.children.append(self.match("PUNCTUATION", ")"))
+        else:
+            raise ValueError(f"Token inesperado: {self.current_token()} na posição {self.current_pos}")
 
-def p_type(p):
-    '''type : INT
-            | BOOL
-            | STRING
-            | VOID'''
-    p[0] = p[1]
+        while self.current_token()[0] == "PUNCTUATION" and self.current_token()[1] == ".":
+            node.children.append(self.match("PUNCTUATION", "."))
+            node.children.append(self.match("IDENTIFIER"))
+            if self.current_token()[0] == "PUNCTUATION" and self.current_token()[1] == "(":
+                node.children.append(self.match("PUNCTUATION", "("))
+                if self.current_token()[0] != "PUNCTUATION" or self.current_token()[1] != ")":
+                    node.children.append(self.exps())
+                node.children.append(self.match("PUNCTUATION", ")"))
+        return node
 
+    def exps(self):
+        node = Node("EXPS")
+        node.children.append(self.exp())
+        while self.current_token()[0] == "PUNCTUATION" and self.current_token()[1] == ",":
+            node.children.append(self.match("PUNCTUATION", ","))
+            node.children.append(self.exp())
+        return node
 
-def p_expression(p):
-    '''expression : expression PLUS expression
-                  | expression MINUS expression
-                  | expression TIMES expression
-                  | expression LESS expression
-                  | expression GREATER expression
-                  | expression LEQ expression
-                  | expression GEQ expression
-                  | expression EQ expression
-                  | expression NEQ expression
-                  | expression AND expression
-                  | NOT expression
-                  | LPAREN expression RPAREN
-                  | NUMBER
-                  | ID
-                  | TRUE
-                  | FALSE
-                  | NULL
-                  | expression DOT ID LPAREN param RPAREN
-                  | expression DOT LEN
-                  | NEW ID LPAREN param RPAREN
-                  | THIS
-                  | expression LBRACKET expression RBRACKET'''
+    def match(self, token_type, token_value=None):
+        if self.current_pos < len(self.tokens):
+            token = self.tokens[self.current_pos]
+            #print(f"Matching token: {token}")  # Linha para depuração
+            if token[0] == token_type and (token_value is None or token[1] == token_value):
+                self.current_pos += 1
+                return Node(token_type, token[1])
+            else:
+                raise ValueError(f"Token inesperado: {token} na posição {self.current_pos}")
+        else:
+            raise ValueError(f"Fim inesperado dos tokens na posição {self.current_pos}")
 
-    if len(p) == 4:  # Binary operations (e.g., PLUS, MINUS, etc.)
-        p[0] = (p[2], p[1], p[3])
-    elif len(p) == 3:  # Unary operation (e.g., NOT)
-        p[0] = ('not', p[2])
-    elif len(p) == 2:  # Single token (NUMBER, ID, TRUE, FALSE, NULL)
-        p[0] = p[1]
-    elif len(p) == 5:  # Method call (expression DOT ID LPAREN param RPAREN)
-        p[0] = ('method_call', p[1], p[3], p[4])  # p[3] is the method name (ID), p[4] is the argument list
-    elif len(p) == 4:  # Array access (expression LBRACKET expression RBRACKET)
-        p[0] = ('array_access', p[1], p[3])  # p[1] is the array, p[3] is the index
-    elif len(p) == 3:  # Length access (expression DOT LEN)
-        p[0] = ('length', p[1])  # p[1] is the array or string
-    elif len(p) == 4:  # Object creation (NEW ID LPAREN param RPAREN)
-        p[0] = ('new_object', p[2], p[4])  # p[2] is the class name, p[4] is the arguments
-    elif len(p) == 2:  # 'this' refers to the current instance of the class
-        p[0] = ('this')
-    else:  # Parentheses for grouping
-        p[0] = p[2]
-
-def p_empty(p):
-    '''empty :'''
-    p[0] = None
-
-# Other grammar rules for statements, expressions, etc.
-
-def p_error(p):
-    if p:
-        print(f"Syntax error at token {p.type} ('{p.value}') at line {p.lineno}")
-    else:
-        print("Syntax error at EOF")
-
-# Your parser creation
-parser = yacc.yacc()
-
-def parse_input(tokens):
-    """Function to parse the tokenized input."""
-    return parser.parse(tokens)
-
+    def current_token(self):
+        if self.current_pos < len(self.tokens):
+            return self.tokens[self.current_pos]
+        else:
+            return ("EOF", "EOF")

@@ -1,27 +1,29 @@
-from parser import parser  # Import the parser from parser.py
+from lexer import AnalisadorLexico
+from parser import Parser
 
-# Sample input data (raw source code)
 data = '''
-class Factorial{
-    public static void main(String[] a){
+class Factorial {
+    public static void main(String[] a) {
         System.out.println(new Fac().ComputeFac(10));
     }
 }
 
 class Fac {
-    public int ComputeFac(int num){
+    public int ComputeFac(int num) {
         int num_aux;
         if (num < 1)
             num_aux = 1;
         else
             num_aux = num * (this.ComputeFac(num-1));
-        return num_aux ;
+        return num_aux;
     }
 }
 '''
 
-# Parse the input data directly (pass the raw string to parser)
-result = parser.parse(data)  # Pass the raw source code string directly
-
-# Print the result (AST or parse result)
-print(result)
+lexer = AnalisadorLexico(data)
+tokens = lexer.tokenize()
+#print("Tokens:", tokens)
+parser = Parser(tokens)
+ast = parser.parse()
+print("Árvore Sintática:")
+print(ast)
