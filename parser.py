@@ -266,7 +266,6 @@ class Parser:
     def match(self, token_type, token_value=None):
         if self.current_pos < len(self.tokens):
             token = self.tokens[self.current_pos]
-            #print(f"Matching token: {token}")  # Linha para depuração
             if token[0] == token_type and (token_value is None or token[1] == token_value):
                 self.current_pos += 1
                 return Node(token_type, token[1])
