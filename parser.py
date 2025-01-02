@@ -11,6 +11,7 @@ class Node:
         return ret
 
 class Parser:
+
     def __init__(self, tokens):
         self.tokens = tokens
         self.current_pos = 0
@@ -54,7 +55,7 @@ class Parser:
             node.children.append(self.match("RESERVED_WORD", "extends"))
             node.children.append(self.match("IDENTIFIER"))
         node.children.append(self.match("PUNCTUATION", "{"))
-        while self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] in ["int", "boolean", "String"]:
+        while self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] in ["int", "boolean",]:
             node.children.append(self.var())
         while self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] == "public":
             node.children.append(self.metodo())
@@ -64,7 +65,7 @@ class Parser:
     def var(self):
         node = Node("VAR")
         node.children.append(self.tipo())
-        node.children.append(self.match("IDENTIFIER"))
+        node.children.append(self.match("IDENTIFIER",self.current_token()[1]))
         node.children.append(self.match("PUNCTUATION", ";"))
         return node
 
@@ -91,7 +92,7 @@ class Parser:
     def params(self):
         node = Node("PARAMS")
         node.children.append(self.tipo())
-        node.children.append(self.match("IDENTIFIER"))
+        node.children.append(self.match("IDENTIFIER",self.current_token()[1]))
         while self.current_token()[0] == "PUNCTUATION" and self.current_token()[1] == ",":
             node.children.append(self.match("PUNCTUATION", ","))
             node.children.append(self.tipo())
@@ -142,7 +143,7 @@ class Parser:
             node.children.append(self.match("PUNCTUATION", ")"))
             node.children.append(self.match("PUNCTUATION", ";"))
         elif self.current_token()[0] == "IDENTIFIER":
-            node.children.append(self.match("IDENTIFIER"))
+            node.children.append(self.match("IDENTIFIER",self.current_token()[1]))
             if self.current_token()[0] == "OPERATOR" and self.current_token()[1] == "=":
                 node.children.append(self.match("OPERATOR", "="))
                 node.children.append(self.exp())
@@ -198,6 +199,7 @@ class Parser:
         elif self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] in ["true", "false", "null"]:
             node.children.append(self.match("RESERVED_WORD", self.current_token()[1]))
         elif self.current_token()[0] == "INTEGER":
+            print(1)
             node.children.append(self.match("INTEGER"))
         elif self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] == "new":
             if self.current_token()[1] == "int":
@@ -212,7 +214,7 @@ class Parser:
             node.children.append(self.pexp())
             if self.current_token()[0] == "PUNCTUATION" and self.current_token()[1] == ".":
                 node.children.append(self.match("PUNCTUATION", "."))
-                node.children.append(self.match("IDENTIFIER", "length"))
+                node.children.append(self.match("RESERVED_WORD", "length"))
             elif self.current_token()[0] == "PUNCTUATION" and self.current_token()[1] == "[":
                 node.children.append(self.match("PUNCTUATION", "["))
                 node.children.append(self.exp())
@@ -230,7 +232,7 @@ class Parser:
     def pexp(self):
         node = Node("PEXP")
         if self.current_token()[0] == "IDENTIFIER":
-            node.children.append(self.match("IDENTIFIER"))
+            node.children.append(self.match("IDENTIFIER",self.current_token()[1]))
         elif self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] == "this":
             node.children.append(self.match("RESERVED_WORD", "this"))
         elif self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] == "new":
