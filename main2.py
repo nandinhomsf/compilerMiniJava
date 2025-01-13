@@ -1,33 +1,6 @@
 from lexer import AnalisadorLexico
 from parser import Parser
-from graphviz import Digraph
 from semantic import AnalisadorSemantico
-
-def visualize_ast(node, graph=None, parent_id=None):
-    if graph is None:
-        graph = Digraph(format='png')
-        graph.attr(rankdir="TB")
-
-    current_id = str(id(node))
-
-    label = node.type
-    if node.value is not None:
-        label += f": {node.value}"
-
-
-    graph.node(current_id, label=label)
-
-
-    if parent_id is not None:
-        graph.edge(parent_id, current_id)
-
-
-    for child in node.children:
-        visualize_ast(child, graph, current_id)
-
-    return graph
-
-
 
 if __name__ == "__main__":
     data = '''
@@ -49,6 +22,7 @@ if __name__ == "__main__":
     }
     '''
 
+
     # Análise léxica
     lexer = AnalisadorLexico(data)
     tokens = lexer.tokenize()
@@ -69,10 +43,6 @@ if __name__ == "__main__":
     else:
         print("Análise semântica concluída sem erros.")
 
-    print("Árvore Sintática:")
-    print(ast)
-
-    print("Gerando a visualização da Árvore Sintática...")
-    graph = visualize_ast(ast)
-    graph.render('arvore_sintatica', view=True)
-    print("Árvore Sintática salva como 'arvore_sintatica.png', exibindo...")
+    # Exibe a árvore sintática (opcional)
+    #print("\nÁrvore Sintática:")
+    #print(ast)

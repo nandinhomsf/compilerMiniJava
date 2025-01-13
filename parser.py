@@ -199,7 +199,6 @@ class Parser:
         elif self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] in ["true", "false", "null"]:
             node.children.append(self.match("RESERVED_WORD", self.current_token()[1]))
         elif self.current_token()[0] == "INTEGER":
-            print(1)
             node.children.append(self.match("INTEGER"))
         elif self.current_token()[0] == "RESERVED_WORD" and self.current_token()[1] == "new":
             if self.current_token()[1] == "int":
