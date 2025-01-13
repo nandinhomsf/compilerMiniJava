@@ -1,7 +1,8 @@
 from lexer import AnalisadorLexico
 from parser import Parser
-from graphviz import Digraph
 from semantic import AnalisadorSemantico
+from generator import GeradorCodigoMIPS
+from graphviz import Digraph
 
 def visualize_ast(node, graph=None, parent_id=None):
     if graph is None:
@@ -27,52 +28,45 @@ def visualize_ast(node, graph=None, parent_id=None):
 
     return graph
 
+def main():
+    # 1. Leitura do arquivo de entrada
+    nome_arquivo = "entrada.txt"  # Substitua pelo nome do seu arquivo de entrada
+    with open(nome_arquivo, "r") as arquivo:
+        codigo_fonte = arquivo.read()
 
-
-if __name__ == "__main__":
-    data = '''
-    class Factorial {
-        public static void main(String[] a) {
-            System.out.println(new Fac().ComputeFac(10));
-        }
-    }
-
-    class Fac {
-        public int ComputeFac(int num) {
-            int num_aux;
-            if (num < 1)
-                num_aux = 1;
-            else
-                num_aux = num * (this.ComputeFac(num-1));
-            return num_aux;
-        }
-    }
-    '''
-
-    # Análise léxica
-    lexer = AnalisadorLexico(data)
+    # 2. Análise léxica
+    lexer = AnalisadorLexico(codigo_fonte)
     tokens = lexer.tokenize()
 
-    # Análise sintática
+    # 3. Análise sintática
     parser = Parser(tokens)
     ast = parser.parse()
 
-    # Análise semântica
-    semantic_analyzer = AnalisadorSemantico(ast)  # Passa a AST para o analisador semântico
-    erros = semantic_analyzer.analisar()  # Executa a análise semântica
-
-    # Verifica se houve erros semânticos
-    if erros:
-        print("Erros semânticos encontrados:")
-        for erro in erros:
-            print(erro)
-    else:
-        print("Análise semântica concluída sem erros.")
-
-    print("Árvore Sintática:")
+    print("\nÁrvore sintática gerada:")
     print(ast)
 
-    print("Gerando a visualização da Árvore Sintática...")
-    graph = visualize_ast(ast)
-    graph.render('arvore_sintatica', view=True)
-    print("Árvore Sintática salva como 'arvore_sintatica.png', exibindo...")
+    # 4. Análise semântica
+    analisador_semantico = AnalisadorSemantico(ast)  # Passa a AST para o analisador semântico
+    erros_semanticos = analisador_semantico.analisar()  # Executa a análise semântica
+
+    if erros_semanticos:
+        print("\nErros semânticos encontrados:")
+        for erro in erros_semanticos:
+            print(erro)
+    else:
+        print("\nAnálise semântica concluída sem erros.")
+
+    # 5. Geração de código MIPS
+    if not erros_semanticos:  # Só gera código se não houver erros semânticos
+        generator = GeradorCodigoMIPS(ast)
+        mips_code = generator.gerar_codigo()
+
+        print("\nCódigo MIPS gerado:")
+        print(mips_code)
+
+        # 6. Salvar o código MIPS em um arquivo (opcional)
+        with open("saida.asm", "w") as f:
+            f.write(mips_code)
+
+if __name__ == "__main__":
+    main()

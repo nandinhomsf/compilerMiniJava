@@ -1,9 +1,9 @@
 class AnalisadorSemantico:
     def __init__(self, arvore_sintatica):
         self.arvore_sintatica = arvore_sintatica
-        self.tabela_simbolos = {}  # Para armazenar classes, variáveis e métodos
+        self.tabela_simbolos = {}  # Para armazenar variáveis, funções e seus parâmetros
         self.erros = []  # Para armazenar erros semânticos encontrados
-        self.classe_atual = None  # Para rastrear a classe atual
+        self.funcao_atual = None  # Para rastrear a função atual durante a análise
 
     def analisar(self):
         """
@@ -29,7 +29,9 @@ class AnalisadorSemantico:
         elif no.type == "CMD":
             self.visitar_cmd(no)
         elif no.type == "EXP":
-            self.visitar_exp(no)
+            return self.visitar_exp(no)
+        elif no.type == "CHAMADA_FUNCAO":
+            return self.visitar_chamada_funcao(no)
         # Adicione mais casos conforme necessário
 
     def visitar_prog(self, no):
@@ -43,57 +45,66 @@ class AnalisadorSemantico:
         """
         Visita o nó MAIN (método principal).
         """
-        # Verifica se o método main está corretamente declarado
-        if no.children[0].value != "class":
-            self.erros.append("Erro semântico: declaração de classe inválida no método main.")
-        # Verifica outros aspectos do método main
         for filho in no.children:
             self.visitar(filho)
 
     def visitar_classe(self, no):
-        nome_classe = no.children[1].value
-        self.tabela_simbolos[nome_classe] = {"tipo": "classe", "variaveis": {}, "metodos": {}}
-        self.classe_atual = nome_classe  # Define a classe atual
-
-        # Verifica se a classe estende outra classe
-        if len(no.children) > 2 and no.children[2].value == "extends":
-            classe_pai = no.children[3].value
-            if classe_pai not in self.tabela_simbolos:
-                self.erros.append(f"Erro semântico: classe pai '{classe_pai}' não encontrada.")
-
-        # Visita variáveis e métodos da classe
+        """
+        Visita o nó CLASSE.
+        """
         for filho in no.children:
             self.visitar(filho)
 
     def visitar_var(self, no):
+        """
+        Visita o nó VAR (declaração de variável).
+        """
         tipo = no.children[0].value
         nome_var = no.children[1].value
 
-        # Verifica se a variável já foi declarada na classe atual
-        if nome_var in self.tabela_simbolos[self.classe_atual]["variaveis"]:
+        # Verifica se a variável já foi declarada
+        if nome_var in self.tabela_simbolos:
             self.erros.append(f"Erro semântico: variável '{nome_var}' já declarada.")
         else:
-            self.tabela_simbolos[self.classe_atual]["variaveis"][nome_var] = {"tipo": tipo}
+            self.tabela_simbolos[nome_var] = {"tipo": tipo}
 
     def visitar_metodo(self, no):
+        """
+        Visita o nó METODO (declaração de método).
+        """
         nome_metodo = no.children[2].value
         tipo_retorno = no.children[1].value
 
-        # Verifica se a chave 'metodos' existe na tabela de símbolos
-        if "metodos" not in self.tabela_simbolos:
-            self.tabela_simbolos["metodos"] = {}
-
         # Verifica se o método já foi declarado
-        if nome_metodo in self.tabela_simbolos["metodos"]:
+        if nome_metodo in self.tabela_simbolos:
             self.erros.append(f"Erro semântico: método '{nome_metodo}' já declarado.")
         else:
-            self.tabela_simbolos["metodos"][nome_metodo] = {"tipo_retorno": tipo_retorno, "parametros": []}
+            # Armazena o método na tabela de símbolos
+            self.tabela_simbolos[nome_metodo] = {
+                "tipo_retorno": tipo_retorno,
+                "parametros": [],  # Lista de parâmetros
+            }
+            self.funcao_atual = nome_metodo  # Define a função atual
 
-        # Visita parâmetros e comandos do método
-        for filho in no.children:
-            self.visitar(filho)
+            # Visita os parâmetros do método
+            if no.children[3].type == "PARAMETROS":
+                for parametro in no.children[3].children:
+                    tipo_param = parametro.children[0].value
+                    nome_param = parametro.children[1].value
+                    self.tabela_simbolos[nome_metodo]["parametros"].append(
+                        {"nome": nome_param, "tipo": tipo_param}
+                    )
+
+            # Visita o corpo do método
+            for filho in no.children[4:]:
+                self.visitar(filho)
+
+            self.funcao_atual = None  # Reseta a função atual após visitar o método
 
     def visitar_cmd(self, no):
+        """
+        Visita o nó CMD (comando).
+        """
         if no.children[0].value == "if":
             self.visitar_exp(no.children[2])  # Verifica a expressão do if
             self.visitar(no.children[4])  # Verifica o bloco do if
@@ -103,35 +114,87 @@ class AnalisadorSemantico:
             self.visitar_exp(no.children[2])  # Verifica a expressão do while
             self.visitar(no.children[4])  # Verifica o bloco do while
         elif no.children[0].value == "System.out.println":
-            self.visitar_exp(no.children[2])  # Verifica a expressão do println
+            resultado = self.visitar_exp(no.children[2])  # Verifica a expressão do println
+            if resultado is not None:
+                print(f"Resultado da expressão: {resultado}")  # Exibe o resultado da expressão
         elif no.children[0].type == "IDENTIFIER":
             nome_var = no.children[0].value
-            # Verifica se a chave 'variaveis' existe na classe atual
-            if self.classe_atual is None or "variaveis" not in self.tabela_simbolos[self.classe_atual]:
+            if nome_var not in self.tabela_simbolos:
                 self.erros.append(f"Erro semântico: variável '{nome_var}' não declarada.")
             else:
-                if nome_var not in self.tabela_simbolos[self.classe_atual]["variaveis"]:
-                    self.erros.append(f"Erro semântico: variável '{nome_var}' não declarada.")
-                else:
-                    tipo_var = self.tabela_simbolos[self.classe_atual]["variaveis"][nome_var]["tipo"]
-                    tipo_exp = self.visitar_exp(no.children[2])  # Verifica o tipo da expressão
-                    if tipo_var != tipo_exp:
-                        self.erros.append(f"Erro semântico: tipo incompatível na atribuição de '{nome_var}'.")
+                tipo_var = self.tabela_simbolos[nome_var]["tipo"]
+                tipo_exp = self.visitar_exp(no.children[2])  # Verifica o tipo da expressão
+                if tipo_var != tipo_exp:
+                    self.erros.append(f"Erro semântico: tipo incompatível na atribuição de '{nome_var}'.")
 
     def visitar_exp(self, no):
         """
-        Visita o nó EXP (expressão) e retorna o tipo da expressão.
+        Visita o nó EXP (expressão) e retorna o valor da expressão ou o tipo da variável.
         """
         if no.children[0].type == "INTEGER":
-            return "int"
+            return int(no.children[0].value)  # Retorna o valor numérico da constante
         elif no.children[0].type == "RESERVED_WORD" and no.children[0].value in ["true", "false"]:
-            return "boolean"
+            return no.children[0].value  # Retorna o valor booleano
         elif no.children[0].type == "IDENTIFIER":
             nome_var = no.children[0].value
-            if nome_var not in self.tabela_simbolos.get("variaveis", {}):
+            if nome_var not in self.tabela_simbolos:
                 self.erros.append(f"Erro semântico: variável '{nome_var}' não declarada.")
                 return None
             else:
-                return self.tabela_simbolos["variaveis"][nome_var]["tipo"]
-        # Adicione mais casos conforme necessário
+                return self.tabela_simbolos[nome_var]["tipo"]  # Retorna o tipo da variável
+        elif no.children[0].type == "OPERATOR":
+            # Avalia expressões aritméticas ou lógicas
+            valor_esquerda = self.visitar_exp(no.children[1])
+            valor_direita = self.visitar_exp(no.children[2])
+            if valor_esquerda is not None and valor_direita is not None:
+                if no.children[0].value == "+":
+                    return valor_esquerda + valor_direita
+                elif no.children[0].value == "-":
+                    return valor_esquerda - valor_direita
+                elif no.children[0].value == "*":
+                    return valor_esquerda * valor_direita
+                elif no.children[0].value == "/":
+                    return valor_esquerda / valor_direita
+                elif no.children[0].value == "&&":
+                    return valor_esquerda and valor_direita
+                elif no.children[0].value == "||":
+                    return valor_esquerda or valor_direita
+        elif no.children[0].type == "CHAMADA_FUNCAO":
+            return self.visitar_chamada_funcao(no)
         return None
+
+    def visitar_chamada_funcao(self, no):
+        """
+        Visita o nó CHAMADA_FUNCAO e verifica os parâmetros passados.
+        """
+        nome_funcao = no.children[0].value
+
+        # Verifica se a função foi declarada
+        if nome_funcao not in self.tabela_simbolos:
+            self.erros.append(f"Erro semântico: função '{nome_funcao}' não declarada.")
+            return None
+
+        # Obtém os parâmetros esperados da função
+        parametros_esperados = self.tabela_simbolos[nome_funcao]["parametros"]
+
+        # Verifica se a quantidade de argumentos passados corresponde aos parâmetros esperados
+        argumentos_passados = no.children[1].children if len(no.children) > 1 else []
+        if len(argumentos_passados) != len(parametros_esperados):
+            self.erros.append(
+                f"Erro semântico: número incorreto de argumentos para a função '{nome_funcao}'. "
+                f"Esperados: {len(parametros_esperados)}, fornecidos: {len(argumentos_passados)}."
+            )
+            return None
+
+        # Verifica se os tipos dos argumentos correspondem aos tipos dos parâmetros
+        for i, (arg, param) in enumerate(zip(argumentos_passados, parametros_esperados)):
+            tipo_arg = self.visitar_exp(arg)
+            tipo_param = param["tipo"]
+            if tipo_arg != tipo_param:
+                self.erros.append(
+                    f"Erro semântico: tipo incompatível no argumento {i + 1} da função '{nome_funcao}'. "
+                    f"Esperado: {tipo_param}, fornecido: {tipo_arg}."
+                )
+
+        # Retorna o tipo de retorno da função
+        return self.tabela_simbolos[nome_funcao]["tipo_retorno"]
