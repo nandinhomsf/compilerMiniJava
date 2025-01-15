@@ -31,6 +31,7 @@ class AnalisadorSemantico:
         elif no.type == "EXP":
             return self.visitar_exp(no)
         elif no.type == "CHAMADA_FUNCAO":
+            print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
             return self.visitar_chamada_funcao(no)
         # Adicione mais casos conforme necessário
 
@@ -54,6 +55,7 @@ class AnalisadorSemantico:
         """
         for filho in no.children:
             self.visitar(filho)
+        self.tabela_simbolos = {}  # Reseta a tabela de símbolos após visitar a classe
 
     def visitar_var(self, no):
         """
@@ -74,6 +76,7 @@ class AnalisadorSemantico:
         """
         nome_metodo = no.children[2].value
         tipo_retorno = no.children[1].value
+        tabela_classe = self.tabela_simbolos.copy()
 
         # Verifica se o método já foi declarado
         if nome_metodo in self.tabela_simbolos:
@@ -87,19 +90,23 @@ class AnalisadorSemantico:
             self.funcao_atual = nome_metodo  # Define a função atual
 
             # Visita os parâmetros do método
-            if no.children[3].type == "PARAMETROS":
-                for parametro in no.children[3].children:
-                    tipo_param = parametro.children[0].value
-                    nome_param = parametro.children[1].value
+            if no.children[4].type == "PARAMS":
+                pars = no.children[4].children
+                for i in range(0,len(pars),3):
+                    print("99999",i)
+                    tipo_param = pars[i].value
+                    nome_param = pars[i+1].value
+                    self.tabela_simbolos[nome_param] = {"tipo": tipo_param}
                     self.tabela_simbolos[nome_metodo]["parametros"].append(
                         {"nome": nome_param, "tipo": tipo_param}
                     )
 
             # Visita o corpo do método
-            for filho in no.children[4:]:
+            for filho in no.children[5:]:
                 self.visitar(filho)
 
             self.funcao_atual = None  # Reseta a função atual após visitar o método
+            self.tabela_simbolos = tabela_classe.copy()  # Restaura a tabela de símbolos da classe
 
     def visitar_cmd(self, no):
         """
