@@ -96,7 +96,7 @@ class GeradorCodigoMIPS:
 
             # Gera código para o bloco then
             self.visitar_cmd(no.children[4])  # Visita o bloco then
-            self.codigo_mips.append(f"j {label_fim}")  # Pula para o fim do if
+            self.codigo_mips.append(f"jr {label_fim}")  # Pula para o fim do if
 
             # Gera código para o bloco else
             self.codigo_mips.append(f"{label_else}:")
@@ -215,13 +215,14 @@ class GeradorCodigoMIPS:
 
                 # 2. Processa a chamada de método (ComputeFac)
                 # Encontra o nó da chamada de método na AST
-                metodo_chamada = None
-                for filho in no.children:
-                    if filho.type == "IDENTIFIER":
-                        metodo_chamada = filho
-                        break
+                metodos_identifiers = [filho for filho in no.children if filho.type == "IDENTIFIER"]
 
-                if metodo_chamada:
+                if len(metodos_identifiers) >= 2:
+                    nome_metodo = metodos_identifiers[1].value  # Obtém o segundo IDENTIFIER que é o nome do método
+                else:
+                    raise ValueError("Nome do método não encontrado na chamada de função.")
+
+                if nome_metodo:
                     # Processa os argumentos da chamada de método
                     for filho in no.children:
                         if filho.type == "EXPS":
@@ -230,7 +231,7 @@ class GeradorCodigoMIPS:
                             self.codigo_mips.append(f"move $a0, {arg_registrador}")  # Passa o argumento para $a0
 
                     # Chama o método ComputeFac
-                    self.codigo_mips.append(f"jal ComputeFac")  # Chama o método
+                    self.codigo_mips.append(f"jal {nome_metodo}")  # Chama o método
                     self.codigo_mips.append(f"move {registrador}, $v0")  # Armazena o resultado no registrador
 
                 return registrador
