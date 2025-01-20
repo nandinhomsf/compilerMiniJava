@@ -1,3 +1,4 @@
+from parser import Node
 class AnalisadorSemantico:
     def __init__(self, arvore_sintatica):
         self.arvore_sintatica = arvore_sintatica
@@ -30,11 +31,6 @@ class AnalisadorSemantico:
             self.visitar_cmd(no)
         elif no.type == "EXP":
             return self.visitar_exp(no)
-        elif no.type == "CHAMADA_FUNCAO":
-            print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-            return self.visitar_chamada_funcao(no)
-        # Adicione mais casos conforme necessário
-
     def visitar_prog(self, no):
         """
         Visita o nó PROG (programa principal).
@@ -114,7 +110,7 @@ class AnalisadorSemantico:
         """
         if no.children[0].value == "if":
             self.visitar_exp(no.children[2])  # Verifica a expressão do if
-            self.visitar(no.children[4])  # Verifica o bloco do if
+            self.visitar_cmd(no.children[4])  # Verifica o bloco do if
             if len(no.children) > 5 and no.children[5].value == "else":
                 self.visitar(no.children[6])  # Verifica o bloco do else
         elif no.children[0].value == "while":
@@ -129,18 +125,22 @@ class AnalisadorSemantico:
             if nome_var not in self.tabela_simbolos:
                 self.erros.append(f"Erro semântico: variável '{nome_var}' não declarada.")
             else:
-                tipo_var = self.tabela_simbolos[nome_var]["tipo"]
-                tipo_exp = self.visitar_exp(no.children[2])  # Verifica o tipo da expressão
-                if tipo_var != tipo_exp:
-                    self.erros.append(f"Erro semântico: tipo incompatível na atribuição de '{nome_var}'.")
+                '''tipo_var = self.tabela_simbolos[nome_var]["tipo"]
+                tipo_exp =''' 
+                self.visitar_exp(no.children[2])  # Verifica o tipo da expressão
+                if len(no.children) > 4:
+                    self.visitar_exp(no.children[5])
+                '''if tipo_var != tipo_exp:
+                    self.erros.append(f"Erro semântico: tipo incompatível na atribuição de '{nome_var}'.")'''
 
     def visitar_exp(self, no):
         """
         Visita o nó EXP (expressão) e retorna o valor da expressão ou o tipo da variável.
         """
-        if no.children[0].type == "INTEGER":
-            return int(no.children[0].value)  # Retorna o valor numérico da constante
-        elif no.children[0].type == "RESERVED_WORD" and no.children[0].value in ["true", "false"]:
+        for child in no.children:
+            no.value = self.visitar_rexp(child)
+            return no.value
+        '''elif no.children[0].type == "RESERVED_WORD" and no.children[0].value in ["true", "false"]:
             return no.children[0].value  # Retorna o valor booleano
         elif no.children[0].type == "IDENTIFIER":
             nome_var = no.children[0].value
@@ -167,9 +167,121 @@ class AnalisadorSemantico:
                 elif no.children[0].value == "||":
                     return valor_esquerda or valor_direita
         elif no.children[0].type == "CHAMADA_FUNCAO":
-            return self.visitar_chamada_funcao(no)
-        return None
+            return self.visitar_chamada_funcao(no)'''
+        #return None
+    def visitar_rexp(self, no):
+        if len(no.children)==3:
+            self.visitar_rexp(no.children[0])
+            self.visitar_aexp(no.children[2])
+        else: no.value = self.visitar_aexp(no.children[0])
+        return no.value
 
+    def visitar_aexp(self, no):
+        j = 0
+        if len(no.children)>=3:
+            print("entrou 1",no.type,len(no.children))
+            i=0
+            nfilhos = len(no.children)
+            left = self.visitar_mexp(no.children[i])
+            while left == None or type(left)!=int:
+                print("entrou 1.1")
+                i+=2
+                if i>nfilhos:
+                    break
+                left = self.visitar_mexp(no.children[i])
+            j=i
+            i+=2
+            while i<nfilhos:
+                print("entrou 2")
+                right = self.visitar_mexp(no.children[i])
+                if right == None or type(right)!=int:
+                    aux = Node("AEXP",no.value)
+                    aux.children.extend(no.children[j:i-1])
+                    no.children[j:i-1] = [aux]
+                    j+=2
+                    i=j+2
+                    nfilhos = len(no.children)
+                    left = 0
+                else:
+                    no.value = self.executeAexp(no.children[i-1].value, left, right)
+                    print("soma:",no.value,no.type)
+                    left = no.value
+                    i+=2
+            if j>0: no.value = None
+            return no.value
+        else:
+            no.value = self.visitar_mexp(no.children[0])
+        return no.value
+    def visitar_mexp(self, no):
+        j=0
+        if len(no.children)>=3:
+            i=0
+            nfilhos = len(no.children)
+            print("ioioiioioi",no.type,nfilhos)
+            left = self.visitar_sexp(no.children[i])
+            while left == None or type(left)!=int:
+                    print('FOI NONE')
+                    i+=2
+                    if i>nfilhos:
+                        break
+                    left = self.visitar_sexp(no.children[i])
+            i+=2
+            while i<nfilhos:
+                right = self.visitar_sexp(no.children[i])
+                if right == None:
+                    print("DEU RUIM À DIREITA")
+                    i+=2
+                elif type(right)!=int:
+                    aux = Node("MEXP",no.value)
+                    aux.children.extend(no.children[j:i-1])
+                    no.children[j:i-1] = [aux]
+                    j+=2
+                    i=j+2
+                    nfilhos = len(no.children)
+                    left = 1
+                else:
+                    no.value = left * right
+                    left = no.value
+                    i+=2
+            if j>0: no.value = None
+            return no.value
+        else :
+            no.value = self.visitar_sexp(no.children[0])
+            return no.value
+    def visitar_sexp(self, no):
+        if no.children[0].type == "PEXP":
+            self.visitar_pexp(no.children[0])
+            no.value = no.children[0].value
+            print(no.children[0].value)
+            return no.value
+        elif no.type == "INTEGER":
+            print(no.value)
+            return no.value
+        elif no.children[0].type == "INTEGER":
+            no.value = int(no.children[0].value)
+            print("as",no.value)
+            return no.value
+        elif no.children[0].type == "PUNCTUATION":
+            no.value = self.visitar_exp(no.children[1])
+            return no.value
+    def visitar_pexp(self, no):
+        if no.children[0].type == "INTEGER":
+            no.value = int(no.children[0].value)
+            print('innnnnnnnnnnnnnnnnnnnnnnniiiiiiiiiiiiiiiiiiiiiiiinnnnnnnnnnnnnnnnnnnn\n\n\n\n',no.value)
+        elif no.children[0].type == "IDENTIFIER":
+            nome_var = no.children[0].value
+            if nome_var not in self.tabela_simbolos:
+                self.erros.append(f"Erro semântico: variável '{nome_var}' não declarada.")
+            no.value = nome_var
+    
+    def executeAexp(self,op, x, y):
+        x,y=int(x),int(y)
+        if op == '+':
+            return x + y
+        elif op == '-':
+            return x - y
+        else:
+            raise ValueError("Operador inválido para Aexp.")
     def visitar_chamada_funcao(self, no):
         """
         Visita o nó CHAMADA_FUNCAO e verifica os parâmetros passados.
