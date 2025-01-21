@@ -89,7 +89,6 @@ class AnalisadorSemantico:
             if no.children[4].type == "PARAMS":
                 pars = no.children[4].children
                 for i in range(0,len(pars),3):
-                    print("99999",i)
                     tipo_param = pars[i].value
                     nome_param = pars[i+1].value
                     self.tabela_simbolos[nome_param] = {"tipo": tipo_param}
@@ -140,34 +139,7 @@ class AnalisadorSemantico:
         for child in no.children:
             no.value = self.visitar_rexp(child)
             return no.value
-        '''elif no.children[0].type == "RESERVED_WORD" and no.children[0].value in ["true", "false"]:
-            return no.children[0].value  # Retorna o valor booleano
-        elif no.children[0].type == "IDENTIFIER":
-            nome_var = no.children[0].value
-            if nome_var not in self.tabela_simbolos:
-                self.erros.append(f"Erro semântico: variável '{nome_var}' não declarada.")
-                return None
-            else:
-                return self.tabela_simbolos[nome_var]["tipo"]  # Retorna o tipo da variável
-        elif no.children[0].type == "OPERATOR":
-            # Avalia expressões aritméticas ou lógicas
-            valor_esquerda = self.visitar_exp(no.children[1])
-            valor_direita = self.visitar_exp(no.children[2])
-            if valor_esquerda is not None and valor_direita is not None:
-                if no.children[0].value == "+":
-                    return valor_esquerda + valor_direita
-                elif no.children[0].value == "-":
-                    return valor_esquerda - valor_direita
-                elif no.children[0].value == "*":
-                    return valor_esquerda * valor_direita
-                elif no.children[0].value == "/":
-                    return valor_esquerda / valor_direita
-                elif no.children[0].value == "&&":
-                    return valor_esquerda and valor_direita
-                elif no.children[0].value == "||":
-                    return valor_esquerda or valor_direita
-        elif no.children[0].type == "CHAMADA_FUNCAO":
-            return self.visitar_chamada_funcao(no)'''
+        
         #return None
     def visitar_rexp(self, no):
         if len(no.children)==3:
@@ -179,12 +151,10 @@ class AnalisadorSemantico:
     def visitar_aexp(self, no):
         j = 0
         if len(no.children)>=3:
-            print("entrou 1",no.type,len(no.children))
             i=0
             nfilhos = len(no.children)
             left = self.visitar_mexp(no.children[i])
             while left == None or type(left)!=int:
-                print("entrou 1.1")
                 i+=2
                 if i>nfilhos:
                     break
@@ -192,7 +162,6 @@ class AnalisadorSemantico:
             j=i
             i+=2
             while i<nfilhos:
-                print("entrou 2")
                 right = self.visitar_mexp(no.children[i])
                 if right == None or type(right)!=int:
                     aux = Node("AEXP",no.value)
@@ -204,7 +173,6 @@ class AnalisadorSemantico:
                     left = 0
                 else:
                     no.value = self.executeAexp(no.children[i-1].value, left, right)
-                    print("soma:",no.value,no.type)
                     left = no.value
                     i+=2
             if j>0: no.value = None
@@ -217,10 +185,8 @@ class AnalisadorSemantico:
         if len(no.children)>=3:
             i=0
             nfilhos = len(no.children)
-            print("ioioiioioi",no.type,nfilhos)
             left = self.visitar_sexp(no.children[i])
             while left == None or type(left)!=int:
-                    print('FOI NONE')
                     i+=2
                     if i>nfilhos:
                         break
@@ -229,7 +195,6 @@ class AnalisadorSemantico:
             while i<nfilhos:
                 right = self.visitar_sexp(no.children[i])
                 if right == None:
-                    print("DEU RUIM À DIREITA")
                     i+=2
                 elif type(right)!=int:
                     aux = Node("MEXP",no.value)
@@ -252,14 +217,11 @@ class AnalisadorSemantico:
         if no.children[0].type == "PEXP":
             self.visitar_pexp(no.children[0])
             no.value = no.children[0].value
-            print(no.children[0].value)
             return no.value
         elif no.type == "INTEGER":
-            print(no.value)
             return no.value
         elif no.children[0].type == "INTEGER":
             no.value = int(no.children[0].value)
-            print("as",no.value)
             return no.value
         elif no.children[0].type == "PUNCTUATION":
             no.value = self.visitar_exp(no.children[1])
@@ -267,13 +229,13 @@ class AnalisadorSemantico:
     def visitar_pexp(self, no):
         if no.children[0].type == "INTEGER":
             no.value = int(no.children[0].value)
-            print('innnnnnnnnnnnnnnnnnnnnnnniiiiiiiiiiiiiiiiiiiiiiiinnnnnnnnnnnnnnnnnnnn\n\n\n\n',no.value)
         elif no.children[0].type == "IDENTIFIER":
             nome_var = no.children[0].value
             if nome_var not in self.tabela_simbolos:
                 self.erros.append(f"Erro semântico: variável '{nome_var}' não declarada.")
             no.value = nome_var
-    
+
+
     def executeAexp(self,op, x, y):
         x,y=int(x),int(y)
         if op == '+':
@@ -282,38 +244,3 @@ class AnalisadorSemantico:
             return x - y
         else:
             raise ValueError("Operador inválido para Aexp.")
-    def visitar_chamada_funcao(self, no):
-        """
-        Visita o nó CHAMADA_FUNCAO e verifica os parâmetros passados.
-        """
-        nome_funcao = no.children[0].value
-
-        # Verifica se a função foi declarada
-        if nome_funcao not in self.tabela_simbolos:
-            self.erros.append(f"Erro semântico: função '{nome_funcao}' não declarada.")
-            return None
-
-        # Obtém os parâmetros esperados da função
-        parametros_esperados = self.tabela_simbolos[nome_funcao]["parametros"]
-
-        # Verifica se a quantidade de argumentos passados corresponde aos parâmetros esperados
-        argumentos_passados = no.children[1].children if len(no.children) > 1 else []
-        if len(argumentos_passados) != len(parametros_esperados):
-            self.erros.append(
-                f"Erro semântico: número incorreto de argumentos para a função '{nome_funcao}'. "
-                f"Esperados: {len(parametros_esperados)}, fornecidos: {len(argumentos_passados)}."
-            )
-            return None
-
-        # Verifica se os tipos dos argumentos correspondem aos tipos dos parâmetros
-        for i, (arg, param) in enumerate(zip(argumentos_passados, parametros_esperados)):
-            tipo_arg = self.visitar_exp(arg)
-            tipo_param = param["tipo"]
-            if tipo_arg != tipo_param:
-                self.erros.append(
-                    f"Erro semântico: tipo incompatível no argumento {i + 1} da função '{nome_funcao}'. "
-                    f"Esperado: {tipo_param}, fornecido: {tipo_arg}."
-                )
-
-        # Retorna o tipo de retorno da função
-        return self.tabela_simbolos[nome_funcao]["tipo_retorno"]
