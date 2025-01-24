@@ -1,4 +1,5 @@
 from parser import Node
+
 class AnalisadorSemantico:
     def __init__(self, arvore_sintatica):
         self.arvore_sintatica = arvore_sintatica
@@ -31,6 +32,7 @@ class AnalisadorSemantico:
             self.visitar_cmd(no)
         elif no.type == "EXP":
             return self.visitar_exp(no)
+
     def visitar_prog(self, no):
         """
         Visita o nó PROG (programa principal).
@@ -88,9 +90,9 @@ class AnalisadorSemantico:
             # Visita os parâmetros do método
             if no.children[4].type == "PARAMS":
                 pars = no.children[4].children
-                for i in range(0,len(pars),3):
+                for i in range(0, len(pars), 3):
                     tipo_param = pars[i].value
-                    nome_param = pars[i+1].value
+                    nome_param = pars[i + 1].value
                     self.tabela_simbolos[nome_param] = {"tipo": tipo_param}
                     self.tabela_simbolos[nome_metodo]["parametros"].append(
                         {"nome": nome_param, "tipo": tipo_param}
@@ -107,7 +109,34 @@ class AnalisadorSemantico:
         """
         Visita o nó CMD (comando).
         """
-        if no.children[0].value == "if":
+        if no.children[0].type == "CALL":
+            nome_metodo = no.children[0].value
+            if nome_metodo not in self.tabela_simbolos:
+                self.erros.append(f"Erro semântico: método '{nome_metodo}' não declarado.")
+            else:
+                metodo_info = self.tabela_simbolos[nome_metodo]
+                parametros_passados = no.children[2:]  # Assumindo que os parâmetros começam a partir do índice 2
+                
+                # Verifica se o número de parâmetros é correto
+                if len(parametros_passados) != len(metodo_info["parametros"]):
+                    self.erros.append(f"Erro semântico: número de parâmetros inválido para o método '{nome_metodo}'.")
+                else:
+                    print("Número de parâmetros correto.")	
+                
+                # Verifica se os tipos dos parâmetros passados estão corretos
+                for i, param_passado in enumerate(parametros_passados):
+                    tipo_param_passado = self.visitar_exp(param_passado)
+                    tipo_param_declarado = metodo_info["parametros"][i]["tipo"]
+                    
+                    if tipo_param_passado != tipo_param_declarado:
+                        tipo_param_check = False
+                        self.erros.append(f"Erro semântico: tipo incompatível para o parâmetro '{metodo_info['parametros'][i]['nome']}' do método '{nome_metodo}'. Esperado '{tipo_param_declarado}', mas encontrado '{tipo_param_passado}'.")
+                if tipo_param_check:
+                    print("Tipos dos parâmetros corretos.")
+                else:
+                    print("Tipos dos parâmetros incorretos.")
+
+        elif no.children[0].value == "if":
             self.visitar_exp(no.children[2])  # Verifica a expressão do if
             self.visitar_cmd(no.children[4])  # Verifica o bloco do if
             if len(no.children) > 5 and no.children[5].value == "else":
@@ -123,14 +152,7 @@ class AnalisadorSemantico:
             nome_var = no.children[0].value
             if nome_var not in self.tabela_simbolos:
                 self.erros.append(f"Erro semântico: variável '{nome_var}' não declarada.")
-            else:
-                '''tipo_var = self.tabela_simbolos[nome_var]["tipo"]
-                tipo_exp =''' 
-                self.visitar_exp(no.children[2])  # Verifica o tipo da expressão
-                if len(no.children) > 4:
-                    self.visitar_exp(no.children[5])
-                '''if tipo_var != tipo_exp:
-                    self.erros.append(f"Erro semântico: tipo incompatível na atribuição de '{nome_var}'.")'''
+            self.visitar_exp(no.children[2])  # Verifica o tipo da expressão
 
     def visitar_exp(self, no):
         """
@@ -140,79 +162,83 @@ class AnalisadorSemantico:
             no.value = self.visitar_rexp(child)
             return no.value
         
-        #return None
     def visitar_rexp(self, no):
-        if len(no.children)==3:
+        if len(no.children) == 3:
             self.visitar_rexp(no.children[0])
             self.visitar_aexp(no.children[2])
-        else: no.value = self.visitar_aexp(no.children[0])
+        else:
+            no.value = self.visitar_aexp(no.children[0])
         return no.value
 
     def visitar_aexp(self, no):
         j = 0
-        if len(no.children)>=3:
-            i=0
+        if len(no.children) >= 3:
+            i = 0
             nfilhos = len(no.children)
             left = self.visitar_mexp(no.children[i])
-            while left == None or type(left)!=int:
-                i+=2
-                if i>nfilhos:
+            while left is None or type(left) != int:
+                i += 2
+                if i > nfilhos:
                     break
                 left = self.visitar_mexp(no.children[i])
-            j=i
-            i+=2
-            while i<nfilhos:
+            j = i
+            i += 2
+            while i < nfilhos:
                 right = self.visitar_mexp(no.children[i])
-                if right == None or type(right)!=int:
-                    aux = Node("AEXP",no.value)
+                if right is None or type(right) != int:
+                    aux = Node("AEXP", no.value)
                     aux.children.extend(no.children[j:i-1])
                     no.children[j:i-1] = [aux]
-                    j+=2
-                    i=j+2
+                    j += 2
+                    i = j + 2
                     nfilhos = len(no.children)
                     left = 0
                 else:
                     no.value = self.executeAexp(no.children[i-1].value, left, right)
                     left = no.value
-                    i+=2
-            if j>0: no.value = None
+                    i += 2
+            if j > 0:
+                no.value = None
             return no.value
         else:
             no.value = self.visitar_mexp(no.children[0])
         return no.value
+
     def visitar_mexp(self, no):
-        j=0
-        if len(no.children)>=3:
-            i=0
+        j = 0
+        if len(no.children) >= 3:
+            i = 0
             nfilhos = len(no.children)
             left = self.visitar_sexp(no.children[i])
-            while left == None or type(left)!=int:
-                    i+=2
-                    if i>nfilhos:
+            while left is None or type(left) != int:
+                    i += 2
+                    if i > nfilhos:
                         break
                     left = self.visitar_sexp(no.children[i])
-            i+=2
-            while i<nfilhos:
+            i += 2
+            while i < nfilhos:
                 right = self.visitar_sexp(no.children[i])
-                if right == None:
-                    i+=2
-                elif type(right)!=int:
-                    aux = Node("MEXP",no.value)
+                if right is None:
+                    i += 2
+                elif type(right) != int:
+                    aux = Node("MEXP", no.value)
                     aux.children.extend(no.children[j:i-1])
                     no.children[j:i-1] = [aux]
-                    j+=2
-                    i=j+2
+                    j += 2
+                    i = j + 2
                     nfilhos = len(no.children)
                     left = 1
                 else:
                     no.value = left * right
                     left = no.value
-                    i+=2
-            if j>0: no.value = None
+                    i += 2
+            if j > 0:
+                no.value = None
             return no.value
         else :
             no.value = self.visitar_sexp(no.children[0])
             return no.value
+
     def visitar_sexp(self, no):
         if no.children[0].type == "PEXP":
             self.visitar_pexp(no.children[0])
@@ -226,6 +252,7 @@ class AnalisadorSemantico:
         elif no.children[0].type == "PUNCTUATION":
             no.value = self.visitar_exp(no.children[1])
             return no.value
+
     def visitar_pexp(self, no):
         if no.children[0].type == "INTEGER":
             no.value = int(no.children[0].value)
@@ -235,9 +262,8 @@ class AnalisadorSemantico:
                 self.erros.append(f"Erro semântico: variável '{nome_var}' não declarada.")
             no.value = nome_var
 
-
-    def executeAexp(self,op, x, y):
-        x,y=int(x),int(y)
+    def executeAexp(self, op, x, y):
+        x, y = int(x), int(y)
         if op == '+':
             return x + y
         elif op == '-':
